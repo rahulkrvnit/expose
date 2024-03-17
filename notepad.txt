@@ -1,1 +1,40 @@
-tbd
+import requests
+
+def generate_oauth_token(client_id, client_secret):
+    token_url = 'https://github.com/login/oauth/access_token'
+    payload = {
+        'client_id': client_id,
+        'client_secret': client_secret,
+        'grant_type': 'client_credentials'
+    }
+
+    response = requests.post(token_url, data=payload)
+    if response.status_code == 200:
+        return response.json()['access_token']
+    else:
+        print(f"Failed to generate token: {response.text}")
+        return None
+
+def get_user_info(username, oauth_token):
+    user_url = f'https://api.github.com/users/{username}'
+    headers = {
+        'Authorization': f'Bearer {oauth_token}',
+        'Accept': 'application/vnd.github.v3+json'
+    }
+
+    response = requests.get(user_url, headers=headers)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Failed to retrieve user info: {response.text}")
+        return None
+
+# Example usage:
+client_id = 'your_client_id'
+client_secret = 'your_client_secret'
+oauth_token = generate_oauth_token(client_id, client_secret)
+if oauth_token:
+    username = 'example_user'
+    user_info = get_user_info(username, oauth_token)
+    if user_info:
+        print(f"User information: {user_info}")
