@@ -1,40 +1,48 @@
 import requests
 
-def generate_oauth_token(client_id, client_secret):
-    token_url = 'https://github.com/login/oauth/access_token'
-    payload = {
-        'client_id': client_id,
-        'client_secret': client_secret,
-        'grant_type': 'client_credentials'
-    }
+class OAuthClient:
+    def __init__(self, client_id, client_secret):
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.oauth_token = self.generate_oauth_token()
 
-    response = requests.post(token_url, data=payload)
-    if response.status_code == 200:
-        return response.json()['access_token']
-    else:
-        print(f"Failed to generate token: {response.text}")
-        return None
+    def generate_oauth_token(self):
+        token_url = 'https://example.com/oauth/token'
+        payload = {
+            'client_id': self.client_id,
+            'client_secret': self.client_secret,
+            'grant_type': 'client_credentials'
+        }
 
-def get_user_info(username, oauth_token):
-    user_url = f'https://api.github.com/users/{username}'
-    headers = {
-        'Authorization': f'Bearer {oauth_token}',
-        'Accept': 'application/vnd.github.v3+json'
-    }
+        response = requests.post(token_url, data=payload)
+        if response.status_code == 200:
+            return response.json()['access_token']
+        else:
+            print(f"Failed to generate token: {response.text}")
+            return None
 
-    response = requests.get(user_url, headers=headers)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print(f"Failed to retrieve user info: {response.text}")
-        return None
+    def make_authenticated_request(self, url):
+        headers = {
+            'Authorization': f'Bearer {self.oauth_token}',
+            'Accept': 'application/json'
+        }
+
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            return response.json()
+        elif response.status_code == 401:  # Unauthorized, possibly due to token expiration
+            # Regenerate the token and retry the request
+            self.oauth_token = self.generate_oauth_token()
+            return self.make_authenticated_request(url)
+        else:
+            print(f"Failed request: {response.text}")
+            return None
 
 # Example usage:
 client_id = 'your_client_id'
 client_secret = 'your_client_secret'
-oauth_token = generate_oauth_token(client_id, client_secret)
-if oauth_token:
-    username = 'example_user'
-    user_info = get_user_info(username, oauth_token)
-    if user_info:
-        print(f"User information: {user_info}")
+oauth_client = OAuthClient(client_id, client_secret)
+
+# Make authenticated requests using the OAuthClient instance
+response_data = oauth_client.make_authenticated_request('https://example.com/api/resource')
+print(response_data)
