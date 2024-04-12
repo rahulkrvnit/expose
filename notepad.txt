@@ -1,48 +1,97 @@
-import requests
+import sys
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, \
+    QLineEdit, QTextEdit, QRadioButton
 
-class OAuthClient:
-    def __init__(self, client_id, client_secret):
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.oauth_token = self.generate_oauth_token()
 
-    def generate_oauth_token(self):
-        token_url = 'https://example.com/oauth/token'
-        payload = {
-            'client_id': self.client_id,
-            'client_secret': self.client_secret,
-            'grant_type': 'client_credentials'
-        }
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
 
-        response = requests.post(token_url, data=payload)
-        if response.status_code == 200:
-            return response.json()['access_token']
-        else:
-            print(f"Failed to generate token: {response.text}")
-            return None
+        self.setWindowTitle("Live Streaming Video Downloader")
 
-    def make_authenticated_request(self, url):
-        headers = {
-            'Authorization': f'Bearer {self.oauth_token}',
-            'Accept': 'application/json'
-        }
+        # Create central widget
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
 
-        response = requests.get(url, headers=headers)
-        if response.status_code == 200:
-            return response.json()
-        elif response.status_code == 401:  # Unauthorized, possibly due to token expiration
-            # Regenerate the token and retry the request
-            self.oauth_token = self.generate_oauth_token()
-            return self.make_authenticated_request(url)
-        else:
-            print(f"Failed request: {response.text}")
-            return None
+        # Create layout for central widget
+        main_layout = QVBoxLayout()
+        central_widget.setLayout(main_layout)
 
-# Example usage:
-client_id = 'your_client_id'
-client_secret = 'your_client_secret'
-oauth_client = OAuthClient(client_id, client_secret)
+        # Add label
+        label = QLabel("Live Streaming Video Downloader")
+        main_layout.addWidget(label)
 
-# Make authenticated requests using the OAuthClient instance
-response_data = oauth_client.make_authenticated_request('https://example.com/api/resource')
-print(response_data)
+        # Create container widget to hold columns
+        container = QWidget()
+        container_layout = QHBoxLayout()
+        container.setLayout(container_layout)
+        main_layout.addWidget(container)
+
+        # Left column
+        left_column_widget = QWidget()
+        left_column_layout = QVBoxLayout()
+        left_column_widget.setLayout(left_column_layout)
+        container_layout.addWidget(left_column_widget)
+
+        # Dropdown
+        dropdown_label = QLabel("Dropdown:")
+        left_column_layout.addWidget(dropdown_label)
+        dropdown = QComboBox()
+        left_column_layout.addWidget(dropdown)
+
+        # Textbox 1
+        textbox1_label = QLabel("Textbox 1:")
+        left_column_layout.addWidget(textbox1_label)
+        textbox1 = QLineEdit()
+        left_column_layout.addWidget(textbox1)
+
+        # Textbox 2
+        textbox2_label = QLabel("Textbox 2:")
+        left_column_layout.addWidget(textbox2_label)
+        textbox2 = QLineEdit()
+        left_column_layout.addWidget(textbox2)
+
+        # Middle column
+        middle_column_widget = QWidget()
+        middle_column_layout = QVBoxLayout()
+        middle_column_widget.setLayout(middle_column_layout)
+        container_layout.addWidget(middle_column_widget)
+
+        # Radiobutton group
+        radiobutton_label = QLabel("Radiobutton Group:")
+        middle_column_layout.addWidget(radiobutton_label)
+        radiobutton1 = QRadioButton("Option 1")
+        radiobutton2 = QRadioButton("Option 2")
+        radiobutton3 = QRadioButton("Option 3")
+        middle_column_layout.addWidget(radiobutton1)
+        middle_column_layout.addWidget(radiobutton2)
+        middle_column_layout.addWidget(radiobutton3)
+
+        # Right column
+        right_column_widget = QWidget()
+        right_column_layout = QVBoxLayout()
+        right_column_widget.setLayout(right_column_layout)
+        container_layout.addWidget(right_column_widget)
+
+        # Textbox 3
+        textbox3_label = QLabel("Textbox 3:")
+        right_column_layout.addWidget(textbox3_label)
+        textbox3 = QLineEdit()
+        right_column_layout.addWidget(textbox3)
+
+        # Textbox 4
+        textbox4_label = QLabel("Textbox 4:")
+        right_column_layout.addWidget(textbox4_label)
+        textbox4 = QLineEdit()
+        right_column_layout.addWidget(textbox4)
+
+
+def main():
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
