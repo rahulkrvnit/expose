@@ -95,3 +95,75 @@ def main():
 
 if __name__ == "__main__":
     main()
+Here's a detailed analysis of your options, ranked by **scalability, cost, and performance** for querying/joining large Parquet data in S3:
+
+---
+
+### **Top Recommendations**
+#### **1. AWS Athena**  
+**Why?**  
+- **Scalability**: Serverless, automatically parallelizes queries across petabytes of data.  
+- **Cost**: Pay-per-query ($$$ per TB scanned). Use partitioning/columnar projection to reduce costs.  
+- **Performance**: Optimized for Parquet, supports complex joins, and integrates with AWS Glue for schema management.  
+- **Best for**: Ad-hoc queries with infrequent runs and large datasets.  
+
+#### **2. Fargate + DuckDB**  
+**Why?**  
+- **Scalability**: DuckDB processes data in-memory efficiently (single-node). Use multiple Fargate tasks for parallelism.  
+- **Cost**: Low (pay only for vCPU/memory during query execution).  
+- **Performance**: DuckDB is faster than Pandas/Polars for joins, supports SQL, and reads Parquet directly from S3.  
+- **Best for**: Moderate-sized datasets (fits in container memory) with frequent queries.  
+
+#### **3. AWS Batch + PySpark**  
+**Why?**  
+- **Scalability**: PySpark distributes processing across clusters. Handles massive datasets.  
+- **Cost**: Moderate (EC2/Fargate costs + EMR if used). Optimize with spot instances.  
+- **Performance**: Best for complex joins and transformations at scale.  
+- **Best for**: Very large datasets requiring distributed computing.  
+
+---
+
+### **Other Options (Ranked)**
+#### **4. Presto Client/Platform**  
+- Similar to Athena but self-managed. Higher maintenance overhead.  
+- Use only if you need full control over Presto tuning.  
+
+#### **5. Databricks**  
+- High performance with Delta Lake optimizations but expensive for AWS-native setups.  
+
+#### **6. Fargate + Polars**  
+- Faster than Pandas but still single-node. Limited scalability for large joins.  
+
+#### **7. Fargate + PySpark**  
+- Overkill unless you need Spark’s ecosystem. Higher startup time vs. DuckDB.  
+
+#### **8. S3 Select**  
+- Limited SQL support (no joins) and high latency for large datasets.  
+
+#### **9. Fargate + Pandas**  
+- Memory-heavy and slow for large data. Avoid.  
+
+#### **10. FireDucks**  
+- Not a widely recognized tool; likely less optimized than DuckDB.  
+
+---
+
+### **Key Considerations**  
+1. **Data Size**:  
+   - Small/medium: **DuckDB on Fargate** (lowest cost).  
+   - Large: **Athena** or **AWS Batch + PySpark** (distributed processing).  
+2. **Query Frequency**:  
+   - Frequent: DuckDB or Athena (minimize startup delays).  
+3. **Joins Complexity**:  
+   - Simple: Athena.  
+   - Complex: PySpark (e.g., broadcast joins for skewed data).  
+4. **Cost Control**:  
+   - Partition data in S3 and compress Parquet files to reduce Athena/Batch costs.  
+
+---
+
+### **Final Decision**  
+- **Start with Athena**: Minimal setup, no infrastructure management, and scalable.  
+- **If cost becomes an issue**: Switch to **DuckDB on Fargate** for smaller datasets or **AWS Batch + PySpark** for massive data.  
+
+Let me know if you need help designing the workflow!
