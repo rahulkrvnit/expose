@@ -1,1 +1,114 @@
+To design a scalable, multi-region architecture for your scheduled data-fetching application while preventing duplicate processing, follow this structured approach:
 
+### Architecture Overview
+1. **Scheduler & Trigger**: Use AWS EventBridge in each region to trigger the application on a schedule.
+2. **Distributed Coordination**: Utilize DynamoDB for global state tracking to ensure only one instance processes data per interval.
+3. **Stateless Application**: Deploy the app in both regions using AWS Lambda (for short tasks) or ECS/EKS (for long-running tasks).
+4. **Idempotent Kafka Publishing**: Ensure Kafka producers handle duplicates, with cross-region replication if needed.
+
+### Detailed Design
+
+#### 1. **Scheduled Trigger with AWS EventBridge**
+- **Setup**: Create an EventBridge rule in each region (e.g., `us-east-1` and `eu-west-1`) to invoke your application at the desired frequency (e.g., hourly).
+- **Cross-Region Redundancy**: Both regions independently trigger processing attempts, but coordination ensures only one succeeds.
+
+#### 2. **Global State Management with DynamoDB**
+- **Centralized State Table**: Use a DynamoDB table (in one region with cross-region access) to track the last processed interval.
+  - **Table Schema**: 
+    - `PK` (Primary Key): Fixed value like "API_SCHEDULER".
+    - `lastProcessedTime`: Timestamp of the last successful fetch.
+    - `lockTTL`: Time-to-live for the lock to prevent deadlocks.
+  - **Conditional Writes**: When triggered, each instance:
+    1. Reads `lastProcessedTime`.
+    2. Calculates the next interval (e.g., current hour).
+    3. Attempts a conditional write to update `lastProcessedTime` only if it hasn't changed.
+    4. Proceeds only if the write succeeds (indicating it acquired the lock).
+
+#### 3. **Stateless Application Deployment**
+- **Lambda or Containers**:
+  - **AWS Lambda**: Suitable for short-duration tasks. Set a reserved concurrency of 1 per region to reduce contention (but DynamoDB conditional write is the true coordinator).
+  - **ECS/EKS**: For longer tasks, deploy as a service with a scheduled task. Use a DynamoDB lock to coordinate tasks within and across regions.
+- **Logic Flow**:
+  ```python
+  def handler(event, context):
+      next_interval = calculate_next_interval()
+      try:
+          # Attempt to claim the next interval
+          dynamodb.update_item(
+              ConditionExpression="lastProcessedTime = :current",
+              UpdateExpression="SET lastProcessedTime = :next",
+              ExpressionAttributeValues={
+                  ":current": current_interval,
+                  ":next": next_interval
+              }
+          )
+          # If successful, fetch data and publish to Kafka
+          data = fetch_from_api()
+          publish_to_kafka(data)
+      except ConditionalCheckFailedException:
+          # Another instance/region already processed this interval
+          return
+  ```
+
+#### 4. **Kafka Deployment & Data Replication**
+- **Regional Kafka Clusters**: Deploy Kafka in each region (e.g., MSK in AWS).
+- **Cross-Region Replication**: Use Kafka MirrorMaker or Confluent Replicator to sync topics between regions, ensuring consumers in both regions have access to the data.
+- **Idempotent Producers**: Configure Kafka producers to deduplicate messages using unique identifiers (e.g., `timestamp + region`).
+
+### Failure Handling & Optimization
+- **Lock TTL**: Set a TTL (e.g., 5 minutes) on the DynamoDB lock. If processing fails, the lock auto-expires, allowing retries.
+- **Retry Logic**: Implement exponential backoff for transient errors during API fetches or Kafka publishing.
+- **Monitoring**: Use CloudWatch alarms for failed updates or prolonged lock holds.
+
+### Cross-Region DynamoDB Access
+- **Single-Region Table**: Deploy the DynamoDB table in one region (e.g., `us-east-1`) and grant cross-region access to the other region's application. Use VPC endpoints for secure, low-latency access.
+- **Global Tables (Alternative)**: For lower latency, use DynamoDB global tables. Note: Conditional writes may conflict due to eventual consistency, so test thoroughly.
+
+### Scalability
+- **Horizontal Scaling**: Deploy multiple application instances in each region. DynamoDB conditional writes ensure only one instance globally succeeds per interval.
+- **Auto-Scaling**: For ECS/EKS, configure auto-scaling based on CPU/memory usage, though the lock mechanism naturally limits concurrency.
+
+### Example Diagram
+```
+Region A (us-east-1)                   Region B (eu-west-1)
+┌───────────────────┐                  ┌───────────────────┐
+│ EventBridge Rule  │                  │ EventBridge Rule  │
+│ Triggers App      │                  │ Triggers App      │
+└─────────┬─────────┘                  └─────────┬─────────┘
+          │                                       │
+          └───────────┐      DynamoDB       ┌─────┘
+                      │    (us-east-1)      │
+                      └───────┬─────┬───────┘
+                              │ Lock│
+                              │ Check
+                              └───┬─┘
+                                  │
+                          Only one region's app
+                          proceeds to fetch & publish
+                                  │
+                          ┌───────▼───────┐
+                          │  Fetch API    │
+                          └───────┬───────┘
+                                  │
+                          ┌───────▼───────┐
+                          │Publish to Kafka
+                          └───────┬───────┘
+                                  │
+                          ┌───────▼───────┐
+                          │Kafka (Region A)
+                          └───────┬───────┘
+                                  │
+                          ┌───────▼───────┐
+                          │Cross-Region Replication
+                          └───────┬───────┘
+                          ┌───────▼───────┐
+                          │Kafka (Region B)
+                          └───────────────┘
+```
+
+### Conclusion
+This design ensures:
+- **No Duplicate API Calls**: Only one instance globally processes each interval via DynamoDB conditional writes.
+- **Multi-Region Redundancy**: Both regions are active, with failover handled by the lock mechanism.
+- **Horizontal Scalability**: Multiple instances can coexist, with coordination managed by DynamoDB.
+- **Resilience**: TTL-based locks and idempotent Kafka publishing handle failures gracefully.
